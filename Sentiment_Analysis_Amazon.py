@@ -1,7 +1,9 @@
 import findspark
 findspark.init()
-from pyspark.sql.functions import from_json, udf, col, lower, regexp_replace, split, when, rand
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, BooleanType
+from pyspark.sql.functions import from_json, udf, col, lower, regexp_replace, split, when, rand, when
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, BooleanType, ArrayType
+from pyspark.ml.feature import HashingTF, Tokenizer, StopWordsRemover
+
 import random
 import json
 import re
@@ -10,8 +12,14 @@ import time
 import csv
 
 from io import StringIO
-from pyspark.sql import SparkSession, Row
+from pyspark.sql import SparkSession, Row, DataFrame
 from delta import configure_spark_with_delta_pip
+
+from pyspark.ml.classification import NaiveBayes
+from pyspark.ml.base import Transformer
+from pyspark.ml import Pipeline
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql import functions as F
 
 #calculating the start time of executing 
 #start_time=time.time()
@@ -91,17 +99,6 @@ cleaned_df = filtered_df.withColumn("Overall", regexp_replace("Overall", pattern
 
 cleaned_df.write.format("delta").mode("overwrite").save("hdfs:///project/amazon_delta")
 
-from pyspark.ml.feature import HashingTF, Tokenizer, StopWordsRemover
-from pyspark.ml.classification import NaiveBayes
-from pyspark.ml.base import Transformer
-from pyspark.ml import Pipeline
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.ml.evaluation import MulticlassClassificationEvaluator
-from pyspark.sql.types import IntegerType, StringType, ArrayType
-from pyspark.sql.functions import when
-from pyspark.sql import functions as F
-
-
 #fetch the delta table from hdfs
 delta_df = spark.read.format("delta").load("hdfs:///project/amazon_delta")
 #delta_df.show(3,truncate=False)
@@ -156,13 +153,15 @@ accuracy = evaluator.evaluate(predictions)
 print("Accuracy:", accuracy)
 
 # make predictions on new reviewText. 0 - Negative, 1 - Positive
-new_review_text = "Thios book had no cohesion, would not recomend. I am dissapointed and upset"
-#new_review_text = "I loved this book. It sure lived up to my expectation and WHAT A TWIST"
-new_data = spark.createDataFrame([(new_review_text,)], ["ReviewText"])
-new_predictions = model.transform(new_data)
+negative_review_text = "Thios book had no cohesion, would not recomend. I am dissapointed and upset"
+positive_review_text = "I loved this book. It sure lived up to my expectation and WHAT A TWIST"
+negative_data = spark.createDataFrame([(negative_review_text,)], ["ReviewText"])
+negative_predictions = model.transform(negative_data)
+positive_data = spark.createDataFrame([(positive_review_text,)], ["ReviewText"])
+positive_predictions = model.transform(positive_data)
 
 # Show the prediction for the new reviewText
-new_predictions.select("ReviewText", "prediction").show(truncate=False)
-
+negative_predictions.select("ReviewText", "prediction").show(truncate=False)
+positive_predictions.select("ReviewText", "prediction").show(truncate=False)
 
 spark.stop()
